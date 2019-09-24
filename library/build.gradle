@@ -1,8 +1,10 @@
 apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
 apply plugin: 'org.jetbrains.dokka-android'
-apply plugin: 'com.github.dcendents.android-maven'
-apply plugin: 'com.jfrog.bintray'
+
+apply plugin: 'maven'
+apply plugin: 'signing'
+apply from: '../publish.gradle'
 
 ext {
     libVersion = '1.7.0'
@@ -58,69 +60,66 @@ artifacts {
     archives sourcesJar
 }
 
-install.repositories.mavenInstaller.pom.project {
-    name libName
-    description libDescription
-    url githubUrl
-    groupId libGroup
-    artifactId libArtifactId
-    version libVersion
-    packaging 'aar'
 
-    scm {
-        connection githubGit
-        url githubUrl
-    }
-    licenses {
-        license {
-            name 'The Apache Software License, Version 2.0'
-            url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
-        }
-    }
-    developers {
-        developer {
-            id = 'natario'
-            name 'Mattia Iavarione'
-        }
-    }
+
+task androidSourcesJar(type: Jar) {
+    classifier = 'sources'
+    from android.sourceSets.main.java.srcDirs
 }
 
-def bintrayUser
-def bintrayKey
-def hasBintray = false
-if (System.getenv('TRAVIS') == 'true') {
-    if (System.getenv('TRAVIS_SECURE_ENV_VARS') == 'true') {
-        bintrayUser = System.getenv("BINTRAY_USER")
-        bintrayKey = System.getenv("BINTRAY_KEY")
-        hasBintray = true
-    }
-} else {
-    Properties props = new Properties()
-    props.load(project.rootProject.file('local.properties').newDataInputStream())
-    bintrayUser = props.getProperty('bintray.user')
-    bintrayKey = props.get('bintray.key')
-    hasBintray = true
+artifacts {
+    archives androidSourcesJar
 }
 
-if (hasBintray) {
-    bintray {
-        // https://github.com/bintray/gradle-bintray-plugin
-        user = bintrayUser
-        key = bintrayKey
-        configurations = ['archives']
-        publish = true
-        override = true
-        pkg {
-            repo = 'android'
-            name = libName
-            licenses = ['Apache-2.0']
-            vcsUrl = githubGit
-            desc = libDescription
-            version {
-                name = libVersion
-                desc = libName + ' v' + libVersion
-                released = new Date()
-                vcsTag = 'v' + libVersion
+signing {
+    required { !VERSION_NAME.contains("SNAPSHOT") }
+    sign configurations.archives
+}
+
+dokka {
+    outputFormat = 'html'
+    outputDirectory = "$buildDir/javadoc"
+}
+
+uploadArchives {
+    repositories {
+        mavenDeployer {
+            beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+
+            repository(url: resolveRepositoyUrl()) {
+                authentication(userName: getUsername(),
+                        password: getPassword())
+                pom.groupId = GROUP
+                pom.artifactId = ARTIFACT_ID
+
+                pom.version = VERSION_NAME
+            }
+
+            pom.project {
+                name POM_NAME
+                description POM_DESCRIPTION
+                url POM_URL
+
+                scm {
+                    url POM_SCM_URL
+                    connection POM_SCM_CONNECTION
+                    developerConnection POM_SCM_DEV_CONNECTION
+                }
+
+                licenses {
+                    license {
+                        name POM_LICENCE_NAME
+                        url POM_LICENCE_URL
+                        distribution POM_LICENCE_DIST
+                    }
+                }
+
+                developers {
+                    developer {
+                        id POM_DEVELOPER_ID
+                        name POM_DEVELOPER_NAME
+                    }
+                }
             }
         }
     }
